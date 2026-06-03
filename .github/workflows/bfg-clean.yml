@@ -1,0 +1,59 @@
+name: BFG Repo Cleaner
+
+on:
+  workflow_dispatch:
+    inputs:
+      remove_file:
+        description: "File name to remove from history (e.g. passwords.txt)"
+        required: false
+        default: ""
+      remove_text:
+        description: "Text pattern to replace (e.g. API_KEY)"
+        required: false
+        default: ""
+
+jobs:
+  clean-history:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Download BFG Repo-Cleaner
+        run: |
+          wget https://repo1.maven.org/maven2/com/madgag/bfg/1.14.0/bfg-1.14.0.jar -O bfg.jar
+
+      - name: Run BFG (remove files if specified)
+        if: ${{ inputs.remove_file != '' }}
+        run: |
+          git clone --mirror https://github.com/${{ github.repository }} repo.git
+          cd repo.git
+          java -jar ../bfg.jar --delete-files "${{ inputs.remove_file }}"
+          git reflog expire --expire=now --all
+          git gc --prune=now --aggressive
+
+      - name: Run BFG (replace text if specified)
+        if: ${{ inputs.remove_text != '' }}
+        run: |
+          git clone --mirror https://github.com/${{ github.repository }} repo.git
+          cd repo.git
+          java -jar ../bfg.jar --replace-text <(echo "${{ inputs.remove_text }}==REDACTED")
+          git reflog expire --expire=now --all
+          git gc --prune=now --aggressive
+
+      - name: Push cleaned history
+        run: |
+          cd repo.git
+          git push --force
