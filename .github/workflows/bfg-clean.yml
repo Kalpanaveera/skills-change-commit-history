@@ -25,7 +25,7 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Clone repo as mirror
+      - name: Clone full repo (mirror)
         run: |
           git clone --mirror https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} repo.git
 
@@ -33,26 +33,34 @@ jobs:
         run: |
           wget https://repo1.maven.org/maven2/com/madgag/bfg/1.14.0/bfg-1.14.0.jar -O bfg.jar
 
-      - name: Run BFG - delete files
+      - name: Run BFG - delete file from history
         if: ${{ inputs.remove_file != '' }}
         run: |
           cd repo.git
           java -jar ../bfg.jar --delete-files "${{ inputs.remove_file }}"
 
-      - name: Run BFG - replace text
+      - name: Run BFG - replace text in history
         if: ${{ inputs.remove_text != '' }}
         run: |
           cd repo.git
           echo "${{ inputs.remove_text }}==REDACTED" > replace.txt
           java -jar ../bfg.jar --replace-text replace.txt
 
-      - name: Cleanup repo history
+      - name: Cleanup git history
         run: |
           cd repo.git
           git reflog expire --expire=now --all
           git gc --prune=now --aggressive
 
+      - name: Remove hidden pull request refs (FIX FOR YOUR ERROR)
+        run: |
+          cd repo.git
+          git for-each-ref refs/pull | cut -d' ' -f2 | while read ref; do
+            git update-ref -d "$ref" || true
+          done
+
       - name: Force push cleaned history
         run: |
           cd repo.git
-          git push --force
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git push --force --mirror origin
