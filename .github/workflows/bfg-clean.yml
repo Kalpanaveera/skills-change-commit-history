@@ -20,40 +20,39 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout full history
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - name: Set up Git identity
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
+      - name: Clone repo as mirror
+        run: |
+          git clone --mirror https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} repo.git
 
       - name: Download BFG Repo-Cleaner
         run: |
           wget https://repo1.maven.org/maven2/com/madgag/bfg/1.14.0/bfg-1.14.0.jar -O bfg.jar
 
-      - name: Run BFG (remove files if specified)
+      - name: Run BFG - delete files
         if: ${{ inputs.remove_file != '' }}
         run: |
-          git clone --mirror https://github.com/${{ github.repository }} repo.git
           cd repo.git
           java -jar ../bfg.jar --delete-files "${{ inputs.remove_file }}"
-          git reflog expire --expire=now --all
-          git gc --prune=now --aggressive
 
-      - name: Run BFG (replace text if specified)
+      - name: Run BFG - replace text
         if: ${{ inputs.remove_text != '' }}
         run: |
-          git clone --mirror https://github.com/${{ github.repository }} repo.git
           cd repo.git
-          java -jar ../bfg.jar --replace-text <(echo "${{ inputs.remove_text }}==REDACTED")
+          echo "${{ inputs.remove_text }}==REDACTED" > replace.txt
+          java -jar ../bfg.jar --replace-text replace.txt
+
+      - name: Cleanup repo history
+        run: |
+          cd repo.git
           git reflog expire --expire=now --all
           git gc --prune=now --aggressive
 
-      - name: Push cleaned history
+      - name: Force push cleaned history
         run: |
           cd repo.git
           git push --force
